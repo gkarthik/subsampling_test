@@ -32,8 +32,8 @@ def getSraAccessions(jsonlPath) {
 }
 
 workflow {
-    def test_sras = getSraAccessions("./data_covid/metadata/583.jsonl")
-    def subsample_levels = [30000, 100000, 1000000, 5000000, 10000000, 'all']
+    def test_sras = getSraAccessions(params.sra_metadata)
+    def subsample_levels = params.subsample_levels
     
     reference_ch = Channel.fromPath(params.reference)
     reference_val = Channel.value(params.reference)
