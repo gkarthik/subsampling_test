@@ -1,0 +1,5 @@
+.nextflow*
+output/
+subsampling_test*
+work
+data_covid/
