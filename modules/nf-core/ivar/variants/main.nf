@@ -18,7 +18,7 @@ process IVAR_VARIANTS {
     """
     samtools index ${bamFile}
 
-    samtools mpileup -B --reference ${reference} -r \"${referenceGene}\" -A -d 0 -aa -Q 0 ${bamFile} | ivar variants -p ${meta.id}_${gene}_variants -t ${variant_threshold} -m ${variant_min_depth} -r ${reference} ${gff_file_arg}
+    samtools mpileup -B --reference ${reference} -r \"${referenceGene}\" -A -d 0 -aa -Q 0 ${bamFile} | ivar variants -G -p ${meta.id}_${gene}_variants -t ${variant_threshold} -m ${variant_min_depth} -r ${reference} ${gff_file_arg}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
