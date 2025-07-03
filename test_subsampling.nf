@@ -6,6 +6,8 @@ import groovy.json.JsonSlurper
 
 include { SEQTK_SAMPLE } from './modules/local/seqtk_sample/main'
 include { CHECK_PAIRING } from './modules/local/check_pairing/main'
+include { COVERAGE_STATS } from './modules/local/coverage_stats/main'
+include { COVERAGE_SUMMARY } from './modules/local/coverage_summary/main'
 include { COVERAGE_ANALYSIS } from './modules/local/coverage_analysis/main'
 include { SRATOOLS_PREFETCH } from './modules/nf-core/sratools/prefetch/main'
 include { SRATOOLS_FASTERQDUMP } from './modules/nf-core/sratools/fasterqdump/main'
@@ -31,9 +33,15 @@ def getSraAccessions(jsonlPath) {
     return sraAccessions
 }
 
+def getReadCountFromFastpJson(jsonPath) {
+    def jsonSlurper = new JsonSlurper()
+    def json = jsonSlurper.parseText(file(jsonPath).text)
+    return json.summary.after_filtering.total_reads
+}
+
 workflow {
     def test_sras = getSraAccessions(params.sra_metadata)
-    def subsample_levels = params.subsample_levels
+    def subsample_percentages = params.subsample_percentages
     
     reference_ch = Channel.fromPath(params.reference)
     reference_val = Channel.value(params.reference)
@@ -64,17 +72,33 @@ workflow {
     // Check pairing and fix improperly paired files
     CHECK_PAIRING(FASTP.out.trimmed_reads)
     
-    // create subsampling combos
-    trimmed_reads = CHECK_PAIRING.out.reads
-    
-    subsample_input = trimmed_reads
-        .combine(Channel.from(subsample_levels))
-        .map { meta, reads, num_reads ->
-            def new_meta = meta.clone()
-            new_meta.subsample = num_reads
-            new_meta.id = "${meta.id}_${num_reads}"
-            [new_meta, reads, num_reads]
+    // Combine trimmed reads with FASTP JSON reports for read count extraction
+    reads_with_counts = CHECK_PAIRING.out.reads
+        .join(FASTP.out.json_reports)
+        .map { meta, reads, json_file ->
+            def read_count = getReadCountFromFastpJson(json_file.toString())
+            [meta, reads, read_count]
         }
+    
+    // Create subsampling combinations based on percentages
+    subsample_input = reads_with_counts
+        .combine(Channel.from(subsample_percentages))
+        .map { meta, reads, read_count, percentage ->
+            def target_reads = percentage == 1.0 ? 'all' : Math.round(read_count * percentage)
+            
+            // Only create subsample if it's meaningful (less than total reads)
+            if (percentage == 1.0 || target_reads < read_count) {
+                def new_meta = meta.clone()
+                new_meta.subsample = target_reads
+                new_meta.subsample_percentage = percentage
+                new_meta.total_reads = read_count
+                new_meta.id = "${meta.id}_${Math.round(percentage * 100)}pct"
+                [new_meta, reads, target_reads]
+            } else {
+                null // Skip this combination
+            }
+        }
+        .filter { it != null } // Remove null entries
     
     // subsample reads
     subsample_split = subsample_input
@@ -92,6 +116,17 @@ workflow {
     BWA_MEM(
         SEQTK_SAMPLE.out.reads,
         reference_val
+    )
+    
+    // Calculate coverage statistics for each sample
+    COVERAGE_STATS(
+        BWA_MEM.out.bam,
+        reference_val
+    )
+    
+    // Collect all stats and create CSV summaries grouped by SRA
+    COVERAGE_SUMMARY(
+        COVERAGE_STATS.out.stats.collect()
     )
     
     // variant calling prep
@@ -118,6 +153,4 @@ workflow {
     all_variants = IVAR_VARIANTS.out.variants.collect()
     
     COVERAGE_ANALYSIS(all_variants)
-    
-    IVAR_VARIANTS.out.variants.view()
 } 
