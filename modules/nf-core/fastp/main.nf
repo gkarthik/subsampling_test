@@ -8,6 +8,7 @@ process FASTP {
 
     output:
     tuple val(meta), path('trimmed_*.fastq'), emit: trimmed_reads
+    tuple val(meta), path("${meta.id}_fastp.json"), emit: json_reports
     path "versions.yml", emit: versions
 
     script:
@@ -39,7 +40,9 @@ process FASTP {
             --thread ${task.cpus} \\
             ${args.join(' ')} \\
             -o trimmed_${meta.id}_1.fastq \\
-            -O trimmed_${meta.id}_2.fastq
+            -O trimmed_${meta.id}_2.fastq \\
+            --json ${meta.id}_fastp.json \\
+            --html ${meta.id}_fastp.html
 
         cat <<-END_VERSIONS > versions.yml
         "${task.process}":
@@ -53,7 +56,9 @@ process FASTP {
             -i ${filtered_reads[0]} \\
             --thread ${task.cpus} \\
             ${args.join(' ')} \\
-            -o trimmed_${meta.id}_1.fastq
+            -o trimmed_${meta.id}_1.fastq \\
+            --json ${meta.id}_fastp.json \\
+            --html ${meta.id}_fastp.html
 
         cat <<-END_VERSIONS > versions.yml
         "${task.process}":
@@ -71,6 +76,7 @@ process FASTP {
     touch ${meta.id}_2.fastq
     touch trimmed_${meta.id}_1.fastq
     touch trimmed_${meta.id}_2.fastq
+    touch ${meta.id}_fastp.json
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
