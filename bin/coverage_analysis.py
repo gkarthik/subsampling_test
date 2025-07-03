@@ -29,7 +29,16 @@ def extract_sample_info(filename):
     subsample_level = None
     
     for i, part in enumerate(parts):
-        if part.isdigit() or part == 'all':
+        if part.endswith('pct'):
+            pct_num = part[:-3]
+            if pct_num.isdigit():
+                if pct_num == '100':
+                    subsample_level = 'all'
+                else:
+                    subsample_level = pct_num
+                sample_parts = parts[:i]
+                break
+        elif part.isdigit() or part == 'all':
             subsample_level = part
             sample_parts = parts[:i]
             break
