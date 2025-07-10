@@ -5,7 +5,6 @@ nextflow.enable.dsl = 2
 import groovy.json.JsonSlurper
 
 include { SEQTK_SAMPLE } from './modules/local/seqtk_sample/main'
-include { CHECK_PAIRING } from './modules/local/check_pairing/main'
 include { COVERAGE_STATS } from './modules/local/coverage_stats/main'
 include { COVERAGE_SUMMARY } from './modules/local/coverage_summary/main'
 include { COVERAGE_ANALYSIS } from './modules/local/coverage_analysis/main'
@@ -41,7 +40,7 @@ def getReadCountFromFastpJson(jsonPath) {
 
 workflow {
     def test_sras = getSraAccessions(params.sra_metadata)
-    def subsample_percentages = params.subsample_percentages
+    def subsample_reads = params.subsample_reads
     
     reference_ch = Channel.fromPath(params.reference)
     reference_val = Channel.value(params.reference)
@@ -69,36 +68,37 @@ workflow {
             }
     )
     
-    // Check pairing and fix improperly paired files
-    CHECK_PAIRING(FASTP.out.trimmed_reads)
-    
     // Combine trimmed reads with FASTP JSON reports for read count extraction
-    reads_with_counts = CHECK_PAIRING.out.reads
+    reads_with_counts = FASTP.out.trimmed_reads
         .join(FASTP.out.json_reports)
         .map { meta, reads, json_file ->
             def read_count = getReadCountFromFastpJson(json_file.toString())
             [meta, reads, read_count]
         }
     
-    // Create subsampling combinations based on percentages
+    // Create subsampling combinations with fixed read count AND all reads
     subsample_input = reads_with_counts
-        .combine(Channel.from(subsample_percentages))
-        .map { meta, reads, read_count, percentage ->
-            def target_reads = percentage == 1.0 ? 'all' : Math.round(read_count * percentage)
+        .flatMap { meta, reads, read_count ->
+            def combinations = []
             
-            // Only create subsample if it's meaningful (less than total reads)
-            if (percentage == 1.0 || target_reads < read_count) {
-                def new_meta = meta.clone()
-                new_meta.subsample = target_reads
-                new_meta.subsample_percentage = percentage
-                new_meta.total_reads = read_count
-                new_meta.id = "${meta.id}_${Math.round(percentage * 100)}pct"
-                [new_meta, reads, target_reads]
-            } else {
-                null // Skip this combination
+            // Always add the "all" option
+            def all_meta = meta.clone()
+            all_meta.subsample = 'all'
+            all_meta.total_reads = read_count
+            all_meta.id = "${meta.id}_all"
+            combinations.add([all_meta, reads, 'all'])
+            
+            // Add the fixed subsample if we have enough reads
+            if (read_count >= subsample_reads) {
+                def subsample_meta = meta.clone()
+                subsample_meta.subsample = subsample_reads
+                subsample_meta.total_reads = read_count
+                subsample_meta.id = "${meta.id}_${subsample_reads}reads"
+                combinations.add([subsample_meta, reads, subsample_reads])
             }
+            
+            return combinations
         }
-        .filter { it != null } // Remove null entries
     
     // subsample reads
     subsample_split = subsample_input
