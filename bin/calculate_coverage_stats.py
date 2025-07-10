@@ -6,7 +6,7 @@ import json
 import os
 import sys
 
-def calculate_coverage_stats(bam_file, reference_file):
+def calculate_coverage_stats(bam_file, reference_file, total_reads):
     print(f"Calculating coverage for {bam_file}...")
     
     # Get basic stats with samtools
@@ -14,13 +14,10 @@ def calculate_coverage_stats(bam_file, reference_file):
     flagstat_result = subprocess.run(flagstat_cmd, shell=True, capture_output=True, text=True)
     
     mapped_reads = 0
-    total_reads = 0
     if flagstat_result.returncode == 0:
         for line in flagstat_result.stdout.split('\n'):
             if 'mapped (' in line:
                 mapped_reads = int(line.split()[0])
-            elif 'in total' in line:
-                total_reads = int(line.split()[0])
     else:
         print(f"Error with samtools flagstat: {flagstat_result.stderr}")
         return None
@@ -53,7 +50,7 @@ def calculate_coverage_stats(bam_file, reference_file):
     mapping_rate = (mapped_reads / total_reads * 100) if total_reads > 0 else 0
     
     return {
-        'total_reads': total_reads,
+        'total_reads': total_reads,        # Total read count from SRA
         'mapped_reads': mapped_reads,
         'mapping_rate': round(mapping_rate, 2),
         'breadth_coverage': round(breadth_coverage, 2),
@@ -69,6 +66,7 @@ def main():
     parser.add_argument('--sample_id', required=True, help='Sample identifier')
     parser.add_argument('--sra_accession', required=True, help='SRA accession')
     parser.add_argument('--subsample', required=True, help='Subsample level')
+    parser.add_argument('--total_reads', type=int, required=True, help='Total read count from SRA')
     parser.add_argument('--output', required=True, help='Output stats file')
     
     args = parser.parse_args()
@@ -83,15 +81,16 @@ def main():
     
     print(f"Processing sample: {args.sample_id}")
     print(f"SRA: {args.sra_accession}, Subsample: {args.subsample}")
+    print(f"Total SRA reads: {args.total_reads:,}")
     print(f"BAM file: {args.bam}")
     print(f"Reference: {args.reference}")
     
     # Calculate coverage statistics
-    stats = calculate_coverage_stats(args.bam, args.reference)
+    stats = calculate_coverage_stats(args.bam, args.reference, args.total_reads)
     
     if stats:
         print(f"\n=== COVERAGE STATISTICS for {args.sample_id} ===")
-        print(f"Total reads: {stats['total_reads']:,}")
+        print(f"Total SRA reads: {args.total_reads:,}")
         print(f"Mapped reads: {stats['mapped_reads']:,}")
         print(f"Mapping rate: {stats['mapping_rate']:.2f}%")
         print(f"Breadth coverage: {stats['breadth_coverage']:.2f}%")
@@ -99,9 +98,9 @@ def main():
         print(f"Covered bases: {stats['covered_bases']:,}")
         print(f"Total bases: {stats['total_bases']:,}")
         
-        # Write stats to output file (CSV format)
+        # Write stats to output file (CSV format) - now includes original read count
         with open(args.output, 'w') as f:
-            f.write(f"{args.sample_id},{args.sra_accession},{args.subsample},{stats['total_reads']},{stats['mapped_reads']},{stats['mapping_rate']},{stats['breadth_coverage']},{stats['mean_depth']},{stats['covered_bases']},{stats['total_bases']}\n")
+            f.write(f"{args.sample_id},{args.sra_accession},{args.subsample},{args.total_reads},{stats['mapped_reads']},{stats['mapping_rate']},{stats['breadth_coverage']},{stats['mean_depth']},{stats['covered_bases']},{stats['total_bases']}\n")
         
         print(f"Results saved to: {args.output}")
         
