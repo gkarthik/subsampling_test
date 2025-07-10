@@ -21,6 +21,7 @@ process COVERAGE_STATS {
         --sample_id ${meta.id} \\
         --sra_accession ${meta.sra_accession} \\
         --subsample ${meta.subsample ?: 'all'} \\
+        --total_reads ${meta.total_reads ?: 0} \\
         --output ${meta.id}.stats.txt
 
     cat <<-END_VERSIONS > versions.yml
@@ -32,7 +33,7 @@ process COVERAGE_STATS {
 
     stub:
     """
-    echo "${meta.id},${meta.sra_accession},${meta.subsample ?: 'all'},0,0,0,0,0,0,0" > ${meta.id}.stats.txt
+    echo "${meta.id},${meta.sra_accession},${meta.subsample ?: 'all'},${meta.total_reads ?: 0},0,0,0,0,0,0" > ${meta.id}.stats.txt
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
