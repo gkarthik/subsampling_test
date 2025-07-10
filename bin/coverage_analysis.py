@@ -38,6 +38,13 @@ def extract_sample_info(filename):
                     subsample_level = pct_num
                 sample_parts = parts[:i]
                 break
+        elif part.endswith('reads'):
+            # Handle pattern like '1000000reads'
+            reads_num = part[:-5]
+            if reads_num.isdigit():
+                subsample_level = reads_num
+                sample_parts = parts[:i]
+                break
         elif part.isdigit() or part == 'all':
             subsample_level = part
             sample_parts = parts[:i]
@@ -89,6 +96,32 @@ def main():
             df_all = pd.read_csv(all_file, sep='\t')
             df_all_filtered = df_all[df_all['ALT_FREQ'] > 0.1]
             print(f"Reference data: {len(df_all)} total variants, {len(df_all_filtered)} with ALT_FREQ > 0.1")
+
+            # Generate charts for ALL reads baseline
+            if len(df_all_filtered) > 0:
+                # Histogram for all reads only
+                plt.figure(figsize=(6, 5))
+                plt.hist(df_all_filtered['ALT_FREQ'], bins=30, alpha=0.7, color='lightcoral', edgecolor='black')
+                plt.xlabel('Alternative Allele Frequency')
+                plt.ylabel('Count')
+                plt.title(f'Variant Frequencies\nSample: {sample_id}, All reads')
+                plt.grid(True, alpha=0.3)
+                plt.tight_layout()
+                plt.savefig(os.path.join(output_dir, 'hist_all.png'), dpi=150, bbox_inches='tight')
+                plt.close()
+
+                # Bar chart for variant counts (ALT_FREQ >0.1)
+                plt.figure(figsize=(6, 5))
+                counts = [len(df_all_filtered)]
+                labels = ['All reads']
+                plt.bar(labels, counts, color=['lightcoral'])
+                plt.ylabel('Number of Variants (ALT_FREQ > 0.1)')
+                plt.title(f'Variant Count\nSample: {sample_id}, All reads')
+                for i, count in enumerate(counts):
+                    plt.text(i, count + max(counts)*0.01, str(count), ha='center', va='bottom')
+                plt.tight_layout()
+                plt.savefig(os.path.join(output_dir, 'bar_all.png'), dpi=150, bbox_inches='tight')
+                plt.close()
         except Exception as e:
             print(f"Error reading {all_file}: {e}")
             continue
