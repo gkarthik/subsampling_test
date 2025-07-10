@@ -6,7 +6,7 @@ process COVERAGE_ANALYSIS {
     path variant_files
 
     output:
-    path "coverage_analysis_charts", emit: charts
+    path "*/*.png", emit: charts
     path "versions.yml", emit: versions
 
     when:
@@ -14,13 +14,13 @@ process COVERAGE_ANALYSIS {
 
     script:
     """
-    mkdir -p coverage_analysis_charts
-    python ${projectDir}/bin/coverage_analysis.py . 
-    
-    # Move output to specific directory
+    python ${projectDir}/bin/coverage_analysis.py .
+
+    # Move sample result folders out of the intermediate "output" directory so that
+    # charts reside directly under <sample_id>/.
     if [ -d "output" ]; then
-        cp -r output/* coverage_analysis_charts/ 2>/dev/null || true
-        rm -rf output 2>/dev/null || true
+        mv output/* ./ 2>/dev/null || true
+        rmdir output 2>/dev/null || true
     fi
 
     cat <<-END_VERSIONS > versions.yml
@@ -31,8 +31,8 @@ process COVERAGE_ANALYSIS {
 
     stub:
     """
-    mkdir -p coverage_analysis_charts
-    touch coverage_analysis_charts/dummy_chart.png
+    mkdir -p dummy_sample
+    touch dummy_sample/dummy_chart.png
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
